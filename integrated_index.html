@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integrated Token Analysis</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
+        #chart, #graph, #results { margin-top: 20px; }
+        table { border-collapse: collapse; width: 100%; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        select { margin-bottom: 20px; padding: 5px; }
+    </style>
+</head>
+<body>
+    <h1>Integrated Token Analysis</h1>
+    <select id="tokenSelect">
+        <option value="">Select a token</option>
+    </select>
+    <button onclick="analyzeToken()">Analyze</button>
+
+    <div id="chart"></div>
+    <div id="graph"></div>
+    <div id="results"></div>
+
+    <script>
+    // Get token list
+    fetch('/tokens')
+        .then(response => response.json())
+        .then(tokens => {
+            const tokenSelect = document.getElementById('tokenSelect');
+            tokens.forEach(token => {
+                const option = document.createElement('option');
+                option.value = token;
+                option.textContent = token;
+                tokenSelect.appendChild(option);
+            });
+        });
+
+    // Listen for token selection
+    document.getElementById('tokenSelect').addEventListener('change', function() {
+        const selectedToken = this.value;
+        if (selectedToken) {
+            loadTokenData(selectedToken);
+        }
+    });
+
+    // Load and process data
+    function loadTokenData(token) {
+        fetch(`/data/${token}`)
+            .then(response => response.json())
+            .then(data => {
+                const dates = data.map(row => row.timestamp);
+                const prices = data.map(row => parseFloat(row.close));
+                createChart(token, dates, prices);
+            })
+            .catch(error => {
+                console.error('Error loading data:', error);
+                alert(`Unable to load data for ${token}. Please make sure the CSV file exists and is accessible.`);
+            });
+    }
+
+    // Create chart
+    function createChart(token, dates, prices) {
+        const trace = {
+            x: dates,
+            y: prices,
+            type: 'scatter',
+            mode: 'lines',
+            name: token,
+            line: {
+                color: 'rgb(75, 192, 192)',
+                width: 2
+            }
+        };
+
+        const layout = {
+            title: `${token} Price Trend`,
+            xaxis: {
+                title: 'Date',
+                rangeslider: {visible: true},
+                type: 'date'
+            },
+            yaxis: {
+                title: 'Price (USDT)',
+                fixedrange: false
+            }
+        };
+
+        const config = {
+            responsive: true,
+            displayModeBar: true,
+            modeBarButtonsToAdd: ['drawline', 'drawopenpath', 'eraseshape']
+        };
+
+        Plotly.newPlot('chart', [trace], layout, config);
+    }
+
+    function analyzeToken() {
+        const token = document.getElementById('tokenSelect').value;
+        if (!token) {
+            alert('Please select a token');
+            return;
+        }
+
+        // Generate graph
+        $.post('/generate_graph', {token: token}, function(data) {
+            $('#graph').html(`<img src="data:image/png;base64,${data.graph_url}" alt="Token Graph">`);
+        });
+
+        // Search token
+        $.post('/search_token', {token: token}, function(data) {
+            let tableHtml = `
+                <table>
+                    <tr>
+                        <th>Author</th>
+                        <th>Time</th>
+                        <th>Likes</th>
+                        <th>Retweets</th>
+                        <th>Replies</th>
+                        <th>Content</th>
+                    </tr>
+            `;
+
+            data.forEach(tweet => {
+                tableHtml += `
+                    <tr>
+                        <td>${tweet.author}</td>
+                        <td>${tweet.tweet_time}</td>
+                        <td>${tweet.favorite_count}</td>
+                        <td>${tweet.retweet_count}</td>
+                        <td>${tweet.reply_count}</td>
+                        <td>${tweet.tweet_content}</td>
+                    </tr>
+                `;
+            });
+
+            tableHtml += '</table>';
+            $('#results').html(tableHtml);
+        });
+    }
+    </script>
+</body>
+</html>
